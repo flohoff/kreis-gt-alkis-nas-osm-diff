@@ -3,10 +3,24 @@
 BASE=$(readlink -f $(dirname $0))
 dir="${BASE}/nasfiles"
 
-for file in $(cd ${dir} ; ls -1); do
-	echo $file
-	dest=$(printf "%s/%s" ${dir} ${file})
-	url=$(printf "https://geoportal.kreis-guetersloh.de/opendata/dez4/%s" ${file})
-	echo Fetching ${url} to ${dest}
-	curl -R -L -z ${dest} -o ${dest} "${url}"
+for file in \
+	ALKISBorgholzhausen_EPSG25832_NAS.zip \
+	ALKISGuetersloh_EPSG25832_NAS.zip \
+	ALKISHalleWestf_EPSG25832_NAS.zip \
+	ALKISHarsewinkel_EPSG25832_NAS.zip \
+	ALKISHerzebrockClarholz_EPSG25832_NAS.zip \
+	ALKISLangenberg_EPSG25832_NAS.zip \
+	ALKISRhedaWiedenbrueck_EPSG25832_NAS.zip \
+	ALKISRietberg_EPSG25832_NAS.zip \
+	ALKISSchlossHolteStukenbrock_EPSG25832_NAS.zip \
+	ALKISSteinhagen_EPSG25832_NAS.zip \
+	ALKISVerl_EPSG25832_NAS.zip \
+	ALKISVersmold_EPSG25832_NAS.zip \
+	ALKISWertherWestf_EPSG25832_NAS.zip \
+	; do
+		echo $file
+		dest=$(printf "%s/%s" ${dir} ${file})
+		url=$(printf "https://geoportal.kreis-guetersloh.de/opendata/dez4/%s" ${file})
+		echo Fetching ${url} to ${dest}
+		curl -R -L -z ${dest} -o ${dest} "${url}"
 done
