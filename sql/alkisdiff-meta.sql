@@ -76,6 +76,6 @@ INSERT INTO "meta" VALUES('layer.misclassified.columns:4','gebaeudefunktion');
 INSERT INTO "meta" VALUES('layer.misclassified.columns:5','building');
 INSERT INTO "meta" VALUES('layer.misclassified.popup', ( readfile('data/alkisdiff-meta.misclassified.popup' )) );
 
-INSERT INTO "meta" VALUES( 'boundary', ( readfile('sql/kreis-guetersloh.geojson')));
+INSERT INTO "meta" VALUES( 'boundary', ( readfile('data/kreis-guetersloh.geojson')));
 
 COMMIT;

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 set -x
@@ -28,9 +28,23 @@ psql osm -c "create extension hstore;"
 psql osm -c "alter system set maintenance_work_mem = '1GB';"
 psql osm -c "SELECT pg_reload_conf();"
 
-# Import the osm pbf file
-osm2pgsql --hstore --create --latlong --slim --cache 6000 \
-	-x -d osm -U root ${PBFFILE}
+
+time osmium tags-filter \
+	-o /tmp/local.pbf \
+	${PBFFILE} \
+	"a/building" "a/razed:building,demolished:building,removed:building" "a/natural=water" "a/landuse=basin"
+
+time osm2pgsql \
+        --create --latlong \
+        --number-processes=2 \
+        --hstore --extra-attributes \
+        --slim --cache 6000 \
+        -x \
+	-S ${BASE}/buildings.style \
+        -d osm -U root \
+        /tmp/local.pbf
+
+#time pg_dump osm >/current/debug/osm.pgdump
 
 # Skip indexing - we dont need any of those indexes
 # Import NAS/ALKIS dump
@@ -60,7 +74,8 @@ from    (
 				g.gebaeudefunktion,
                                 ST_Union(p.way) as osmgeom
                         from    ax_gebaeude g
-                                left outer join planet_osm_polygon p on ( ST_Intersects(p.way, g.geom) and p.building <> '' )
+                                left outer join planet_osm_polygon p on ( ST_Intersects(p.way, g.geom) 
+					and coalesce(p.tags->'razed:building',p.tags->'demolished:building',p.building) <> '' )
                         where   ( g.lagezurerdoberflaeche is null or g.lagezurerdoberflaeche <> 1200 )
 			and	g.gebaeudefunktion not in ( 1310 )
                         group by g.geom,ogc_fid,gml_id,gebaeudefunktion
