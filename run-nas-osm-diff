@@ -6,7 +6,7 @@ BASE=$(readlink -f $(dirname $0))
 
 PBF=~/projects/osm/pbfdata/region/kreisgt/kreis-guetersloh.osm.pbf
 
-OUTFILE=${BASE}/sqlite-output/alkis-gebaeude-diff.$(date +%Y%m%d%H%M).sqlite
+OUTFILE=${BASE}/output/alkis-gebaeude-diff.$(date +%Y%m%d%H%M).sqlite
 ALKISDUMP=$(ls -1t ${BASE}/alkis-nas-dump/*.sql.gz | head -1)
 
 time docker run -i --rm \

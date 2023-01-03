@@ -44,7 +44,6 @@ time osm2pgsql \
         -d osm -U root \
         /tmp/local.pbf
 
-#time pg_dump osm >/current/debug/osm.pgdump
 
 # Skip indexing - we dont need any of those indexes
 # Import NAS/ALKIS dump
@@ -52,14 +51,48 @@ zcat ${ALKISFILE} \
 	| sed -e 's/CREATE.* INDEX/-- CREATE INDEX/' \
 	| psql osm -f -
 
+
+# Create dump for plbuildings api 
+psql osm <<EOSQL
+select  *
+into    hu_kreisgt
+from    (
+        select  ogc_fid,
+                gml_id,
+                gebaeudefunktion as funktion,
+                wkb_geometry,
+		'ax_gebaeude' as source
+        from    ax_gebaeude
+	where   ( lagezurerdoberflaeche is null or lagezurerdoberflaeche <> 1200 )
+	and     gebaeudefunktion not in ( 1310 )
+        union all
+        select  ogc_fid,
+                gml_id,
+                bauwerksfunktion as funktion,
+                wkb_geometry,
+		'ax_sonstigesbauwerkodersonstigeeinrichtung' as source
+        from    ax_sonstigesbauwerkodersonstigeeinrichtung
+        ) allbuildings;
+EOSQL
+
+time pg_dump osm -t hu_kreisgt >/output/hu_kreisgt.pgdump
+psql osm -c "alter table hu_kreisgt rename to allbuildings;"
+
+# Create SRID 4326 shadow column in the allbuildings  table
+psql osm -c "SELECT AddGeometryColumn ('public','allbuildings','geom',4326,'GEOMETRY',2);"
+psql osm -c "update allbuildings set geom = ST_Transform(wkb_geometry, 4326);"
+psql osm -c "create index allbuildings_geom_idx on allbuildings using gist (geom);"
+
+
+
 # Create SRID 4326 shadow column in the ax_gebaeude table
-psql osm -c "SELECT AddGeometryColumn ('public','ax_gebaeude','geom',4326,'GEOMETRY',2);"
-psql osm -c "update ax_gebaeude set geom = ST_Transform(wkb_geometry, 4326);"
-psql osm -c "create index ax_gebaeude_geom_idx on ax_gebaeude using gist (geom);"
+#psql osm -c "SELECT AddGeometryColumn ('public','ax_gebaeude','geom',4326,'GEOMETRY',2);"
+#psql osm -c "update ax_gebaeude set geom = ST_Transform(wkb_geometry, 4326);"
+#psql osm -c "create index ax_gebaeude_geom_idx on ax_gebaeude using gist (geom);"
 
 psql osm <<EOSQL
 select  *
-into    ax_gebaeude_diff
+into    allbuildings_diff
 from    (
         select  bar.*,
                 ST_Area(diff, true) area,
@@ -71,14 +104,12 @@ from    (
                         select  g.ogc_fid,
                                 g.gml_id,
                                 g.geom as alkisgeom,
-				g.gebaeudefunktion,
+				g.funktion,
                                 ST_Union(p.way) as osmgeom
-                        from    ax_gebaeude g
+                        from    allbuildings g
                                 left outer join planet_osm_polygon p on ( ST_Intersects(p.way, g.geom) 
 					and coalesce(p.tags->'razed:building',p.tags->'demolished:building',p.building) <> '' )
-                        where   ( g.lagezurerdoberflaeche is null or g.lagezurerdoberflaeche <> 1200 )
-			and	g.gebaeudefunktion not in ( 1310 )
-                        group by g.geom,ogc_fid,gml_id,gebaeudefunktion
+                        group by g.geom,ogc_fid,gml_id,funktion
                         ) foo  
                 ) bar
         ) baz
@@ -137,15 +168,14 @@ from    (
         from    (
                 select  g.ogc_fid,
                         g.gml_id,
-                        g.gebaeudefunktion,
+                        g.funktion,
                         p.building,
 			p.power,
                         p.osm_id,
                         p.way as geomosm,
                         g.geom as geomalkis
-                from    ax_gebaeude g
+                from    allbuildings g
                         left outer join planet_osm_polygon p on ( ST_Intersects(p.way, g.geom) and p.building <> '' )
-                where   ( g.lagezurerdoberflaeche is null or g.lagezurerdoberflaeche <> 1200 ) 
                 ) intersections
         ) areas
 ;
@@ -155,31 +185,31 @@ psql osm <<EOSQL
 select  *
 into    buildingmisclassified
 from    (
-        select  ogc_fid,gml_id,geomalkis as geom,areaalkis,areaosm,osm_id,gebaeudefunktion,building,
+        select  ogc_fid,gml_id,geomalkis as geom,areaalkis,areaosm,osm_id,funktion,building,
                 'Not garage or garages (' || building || ')' as error,
                 'red' as style
         from    buildingmerge
         where   areadiff < areaalkis*0.1
-        and     gebaeudefunktion = 2463
+        and     funktion = 2463
         and     building is not null
 	and	building not in ( 'garage', 'garages' )
 	and	geomalkis is not null
 	union all
-	select  ogc_fid,gml_id,geomalkis as geom,areaalkis,areaosm,osm_id,gebaeudefunktion,building,
+	select  ogc_fid,gml_id,geomalkis as geom,areaalkis,areaosm,osm_id,funktion,building,
                 'Power substation without power tag' as error,
                 'cyan' as style
         from    buildingmerge
         where   areadiff < areaalkis*0.1
-        and     gebaeudefunktion = 2523
+        and     funktion = 2523
 	and	power is null
 	and	geomalkis is not null
 	union all
-	select  ogc_fid,gml_id,geomalkis as geom,areaalkis,areaosm,osm_id,gebaeudefunktion,building,
+	select  ogc_fid,gml_id,geomalkis as geom,areaalkis,areaosm,osm_id,funktion,building,
                 'Shed not tagges as shed (' || building || ')' as error,
                 'brown' as style
         from    buildingmerge
         where   areadiff < areaalkis*0.1
-        and     gebaeudefunktion = 2723
+        and     funktion = 2723
 	and	building is not null
 	and	building <> 'shed'
 	and	geomalkis is not null
@@ -190,7 +220,7 @@ EOSQL
 case ${OUTFILE} in
 	*.dump)
 		pg_dump -O osm \
-			-t ax_gebaeude_diff \
+			-t allbuildings_diff \
 			>${OUTFILE}
 		;;
 	*.sqlite)
@@ -199,7 +229,7 @@ case ${OUTFILE} in
 			-nln buildingnotinosm \
 			${OUTFILE} \
 			PG:"dbname='osm'" \
-			-sql "select ogc_fid as nas_ogc_fid, gml_id, gebaeudefunktion, diff as geom, area, alkisarea, 'Area ' || trunc(area) || 'm²' as text, 'default' as style from ax_gebaeude_diff"
+			-sql "select ogc_fid as nas_ogc_fid, gml_id, funktion, diff as geom, area, alkisarea, 'Area ' || trunc(area) || 'm²' as text, 'default' as style from allbuildings_diff"
 
 		ogr2ogr -f SQLite \
 			-append -update \
@@ -213,7 +243,7 @@ case ${OUTFILE} in
 			-nln misclassified \
 			${OUTFILE} \
 			PG:"dbname='osm'" \
-			-sql "select ogc_fid as nas_ogc_fid,gml_id,gebaeudefunktion,building,geom,error,style from buildingmisclassified"
+			-sql "select ogc_fid as nas_ogc_fid,gml_id,funktion,building,geom,error,style from buildingmisclassified"
 
 		chown --reference $(dirname ${OUTFILE}) ${OUTFILE}
 		;;

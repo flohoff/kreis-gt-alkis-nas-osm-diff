@@ -6,6 +6,6 @@
 Debug info:<br>
 ogc_fid {{ nas_ogc_fid }}<br>
 gml_id: {{ gml_id }}<br>
-gebaeudefunktion: {{ gebaeudefunktion }}<br>
+funktion: {{ funktion }}<br>
 </p>
 {{> remotecontrol }}
